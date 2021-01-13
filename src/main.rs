@@ -11,6 +11,8 @@ use spotify::SpotifyToken;
 mod github;
 use github::GithubAccessToken;
 
+mod cipher;
+
 #[actix_web::get("/healthz")]
 async fn healthz() -> impl Responder {
     HttpResponse::Ok().body("ok!")
@@ -30,6 +32,7 @@ async fn auth(info: web::Query<AuthInfo>) -> impl Responder {
         access_token: info.github_access_token.clone(),
     })
     .unwrap();
+    let state = cipher::encrypt(&state).await.unwrap();
     let url = SpotifyToken::get_auth_uri(&state).unwrap();
     HttpResponse::Found()
         .set_header(http::header::LOCATION, url.to_string())
@@ -51,7 +54,9 @@ async fn auth_callback(info: web::Query<AuthCallbackInfo>) -> impl Responder {
     debug!("{:?}", token_info);
     let current_playing_item = token_info.get_current_playing_item().await.unwrap();
     debug!("{:?}", current_playing_item);
-    let github_access_token: GithubAccessToken = serde_json::from_str(&info.state).unwrap();
+
+    let state = cipher::decrypt(&info.state).await.unwrap();
+    let github_access_token: GithubAccessToken = serde_json::from_str(&state).unwrap();
     github_access_token
         .update_user_bio(&format!("🎵 {}", current_playing_item.name))
         .await
