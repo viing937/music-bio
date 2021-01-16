@@ -1,5 +1,5 @@
 use actix_web::middleware::Logger;
-use actix_web::{http, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http, web, App, Error, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use log::{debug, info};
 use serde::Deserialize;
@@ -7,11 +7,10 @@ use std::env;
 
 mod spotify;
 use spotify::SpotifyToken;
-
 mod github;
 use github::GithubAccessToken;
-
 mod cipher;
+mod error;
 
 #[actix_web::get("/healthz")]
 async fn healthz() -> impl Responder {
@@ -25,7 +24,7 @@ struct AuthInfo {
 }
 
 #[actix_web::get("/auth")]
-async fn auth(info: web::Query<AuthInfo>) -> impl Responder {
+async fn auth(info: web::Query<AuthInfo>) -> Result<HttpResponse, Error> {
     debug!("{:?}", info);
     let state = serde_json::to_string(&GithubAccessToken {
         username: info.github_username.clone(),
@@ -33,10 +32,10 @@ async fn auth(info: web::Query<AuthInfo>) -> impl Responder {
     })
     .unwrap();
     let state = cipher::encrypt(&state).await.unwrap();
-    let url = SpotifyToken::get_auth_uri(&state).unwrap();
-    HttpResponse::Found()
+    let url = SpotifyToken::get_auth_uri(&state)?;
+    Ok(HttpResponse::Found()
         .set_header(http::header::LOCATION, url.to_string())
-        .finish()
+        .finish())
 }
 
 #[derive(Deserialize, Debug)]

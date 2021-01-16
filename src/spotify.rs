@@ -1,3 +1,4 @@
+use crate::error::MyError;
 use actix_web::client::Client;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,7 @@ impl SpotifyToken {
         env::var("CALLBACK_URI").unwrap()
     }
 
-    pub fn get_auth_uri(state: &str) -> Result<Url, url::ParseError> {
+    pub fn get_auth_uri(state: &str) -> Result<Url, MyError> {
         Url::parse_with_params(
             &format!("{}/en/authorize", SpotifyToken::AUTH_URL_PREFIX),
             &[
@@ -44,6 +45,7 @@ impl SpotifyToken {
                 ("state", state.to_string()),
             ],
         )
+        .map_err(|e| MyError::UriParseError(e))
     }
 
     pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, ()> {
