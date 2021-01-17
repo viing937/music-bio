@@ -11,11 +11,11 @@ pub enum GrantType {
 
 #[derive(Deserialize, Debug)]
 pub struct SpotifyToken {
-    access_token: String,
+    pub access_token: String,
     token_type: String,
     scope: String,
     expires_in: i64,
-    refresh_token: String,
+    pub refresh_token: String,
 }
 
 impl SpotifyToken {
@@ -23,15 +23,15 @@ impl SpotifyToken {
     const AUTH_URL_PREFIX: &'static str = "https://accounts.spotify.com";
 
     fn get_client_id() -> String {
-        env::var("SPOTIFY_CLIENT_ID").unwrap()
+        env::var("SPOTIFY_CLIENT_ID").expect("SPOTIFY_CLIENT_ID")
     }
 
     fn get_client_secret() -> String {
-        env::var("SPOTIFY_CLIENT_SECRET").unwrap()
+        env::var("SPOTIFY_CLIENT_SECRET").expect("SPOTIFY_CLIENT_SECRET")
     }
 
     fn get_callback_url() -> String {
-        env::var("CALLBACK_URI").unwrap()
+        env::var("CALLBACK_URI").expect("CALLBACK_URI")
     }
 
     pub fn get_auth_uri(state: &str) -> Result<Url, MyError> {
@@ -48,7 +48,7 @@ impl SpotifyToken {
         .map_err(|e| MyError::UriParseError(e))
     }
 
-    pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, ()> {
+    pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, MyError> {
         info!("Request access token using code {:?}...", code);
         let grant_type = match grant_type {
             GrantType::AuthorizationCode => "authorization_code",
@@ -64,25 +64,24 @@ impl SpotifyToken {
                 client_secret: SpotifyToken::get_client_secret().to_string(),
             })
             .await
-            .unwrap();
+            .map_err(|e| MyError::SendRequestError(e))?;
         debug!("{:?}", resp);
         if !resp.status().is_success() {
-            return Err(());
+            return Err(MyError::SpotifyRequestError);
         }
-        let body = resp.body().await.unwrap();
-        let body = std::str::from_utf8(&body).unwrap();
-        let token_info: SpotifyToken = serde_json::from_str(body).unwrap();
+        let body = resp.body().await.map_err(|e| MyError::PayloadError(e))?;
+        let body = std::str::from_utf8(&body).map_err(|_e| MyError::UnknownError)?;
+        let token_info: SpotifyToken =
+            serde_json::from_str(body).map_err(|e| MyError::SerdeJsonError(e))?;
         Ok(token_info)
     }
 
-    pub async fn refresh_token(&self) -> Result<SpotifyToken, ()> {
-        let token = SpotifyToken::new(GrantType::AuthorizationCode, &self.refresh_token)
-            .await
-            .unwrap();
+    pub async fn refresh_token(&self) -> Result<SpotifyToken, MyError> {
+        let token = SpotifyToken::new(GrantType::AuthorizationCode, &self.refresh_token).await?;
         Ok(token)
     }
 
-    pub async fn get_current_playing_item(&self) -> Result<CurrentPlayingItem, ()> {
+    pub async fn get_current_playing_item(&self) -> Result<CurrentPlayingItem, MyError> {
         info!("Request current playing item...");
         let client = Client::default();
         let mut resp = client
@@ -93,14 +92,15 @@ impl SpotifyToken {
             .bearer_auth(&self.access_token)
             .send()
             .await
-            .unwrap();
+            .map_err(|e| MyError::SendRequestError(e))?;
         debug!("{:?}", resp);
         if !resp.status().is_success() {
-            return Err(());
+            return Err(MyError::SpotifyRequestError);
         }
-        let body = resp.body().await.unwrap();
-        let body = std::str::from_utf8(&body).unwrap();
-        let current_playing_info: CurrentPlayingInfo = serde_json::from_str(body).unwrap();
+        let body = resp.body().await.map_err(|e| MyError::PayloadError(e))?;
+        let body = std::str::from_utf8(&body).map_err(|_e| MyError::UnknownError)?;
+        let current_playing_info: CurrentPlayingInfo =
+            serde_json::from_str(body).map_err(|e| MyError::SerdeJsonError(e))?;
         Ok(current_playing_info.item)
     }
 }

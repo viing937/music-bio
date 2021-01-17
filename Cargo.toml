@@ -17,3 +17,5 @@ serde = "1.0"
 serde_json = "1.0"
 hex = "0.4"
 derive_more = "0.99"
+diesel = { version = "1.4", features = ["sqlite", "r2d2"] }
+r2d2 = "0.8"
