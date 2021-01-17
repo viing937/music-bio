@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 use actix_web::error::BlockingError;
 use actix_web::middleware::Logger;
@@ -21,6 +23,7 @@ use error::MyError;
 mod model;
 mod schema;
 
+embed_migrations!("./migrations");
 type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 
 #[actix_web::get("/healthz")]
@@ -101,6 +104,10 @@ async fn main() -> std::io::Result<()> {
     let pool = r2d2::Pool::builder()
         .build(manager)
         .expect("Failed to create pool.");
+
+    info!("Auto migrating database...");
+    embedded_migrations::run(&pool.get().expect("Failed to get db connection."))
+        .expect("Failed to auto migrate database.");
 
     info!("Starting web server...");
     HttpServer::new(move || {
