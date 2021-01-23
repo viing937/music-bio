@@ -1,21 +1,19 @@
 use crate::error::MyError;
-use actix_web::client::Client;
+use actix_web::{client::Client, http::StatusCode};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::env;
 use url::Url;
 
 pub enum GrantType {
+    RefreshToken,
     AuthorizationCode,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct SpotifyToken {
     pub access_token: String,
-    token_type: String,
-    scope: String,
-    expires_in: i64,
-    pub refresh_token: String,
+    pub refresh_token: Option<String>,
 }
 
 impl SpotifyToken {
@@ -50,22 +48,36 @@ impl SpotifyToken {
 
     pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, MyError> {
         info!("Request access token using code {:?}...", code);
-        let grant_type = match grant_type {
-            GrantType::AuthorizationCode => "authorization_code",
-        };
         let client = Client::default();
+        let request_body = match grant_type {
+            GrantType::RefreshToken => RequestTokenInfo {
+                grant_type: "refresh_token".to_string(),
+                code: None,
+                redirect_uri: None,
+                refresh_token: Some(code.to_string()),
+            },
+            GrantType::AuthorizationCode => RequestTokenInfo {
+                grant_type: "authorization_code".to_string(),
+                code: Some(code.to_string()),
+                redirect_uri: Some(SpotifyToken::get_callback_url().to_string()),
+                refresh_token: None,
+            },
+        };
         let mut resp = client
             .post(format!("{}/api/token", SpotifyToken::AUTH_URL_PREFIX))
-            .send_form(&RequestTokenInfo {
-                grant_type: grant_type.to_string(),
-                code: code.to_string(),
-                redirect_uri: SpotifyToken::get_callback_url().to_string(),
-                client_id: SpotifyToken::get_client_id().to_string(),
-                client_secret: SpotifyToken::get_client_secret().to_string(),
-            })
+            .basic_auth(
+                SpotifyToken::get_client_id(),
+                Some(&SpotifyToken::get_client_secret()),
+            )
+            .send_form(&request_body)
             .await
             .map_err(|e| MyError::SendRequestError(e))?;
         debug!("{:?}", resp);
+        match resp.status() {
+            StatusCode::BAD_REQUEST => return Err(MyError::SpotifyTokenError),
+            StatusCode::UNAUTHORIZED => return Err(MyError::SpotifyExpiredTokenError),
+            _ => (),
+        };
         if !resp.status().is_success() {
             return Err(MyError::SpotifyRequestError);
         }
@@ -76,9 +88,13 @@ impl SpotifyToken {
         Ok(token_info)
     }
 
-    pub async fn refresh_token(&self) -> Result<SpotifyToken, MyError> {
-        let token = SpotifyToken::new(GrantType::AuthorizationCode, &self.refresh_token).await?;
-        Ok(token)
+    pub async fn refresh_token(mut self) -> Result<SpotifyToken, MyError> {
+        info!("Refresh spotify token...");
+        let token =
+            SpotifyToken::new(GrantType::RefreshToken, &self.refresh_token.unwrap()).await?;
+        self.access_token = token.access_token;
+        self.refresh_token = token.refresh_token;
+        Ok(self)
     }
 
     pub async fn get_current_playing_item(&self) -> Result<CurrentPlayingItem, MyError> {
@@ -94,6 +110,11 @@ impl SpotifyToken {
             .await
             .map_err(|e| MyError::SendRequestError(e))?;
         debug!("{:?}", resp);
+        match resp.status() {
+            StatusCode::BAD_REQUEST => return Err(MyError::SpotifyTokenError),
+            StatusCode::NO_CONTENT => return Err(MyError::SpotifyNotPlayingError),
+            _ => (),
+        };
         if !resp.status().is_success() {
             return Err(MyError::SpotifyRequestError);
         }
@@ -108,10 +129,9 @@ impl SpotifyToken {
 #[derive(Serialize, Debug)]
 struct RequestTokenInfo {
     grant_type: String,
-    code: String,
-    redirect_uri: String,
-    client_id: String,
-    client_secret: String,
+    code: Option<String>,
+    redirect_uri: Option<String>,
+    refresh_token: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

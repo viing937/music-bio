@@ -30,6 +30,12 @@ pub enum MyError {
     SendRequestError(SendRequestError),
     #[display(fmt = "SpotifyRequestError")]
     SpotifyRequestError,
+    #[display(fmt = "SpotifyTokenError")]
+    SpotifyTokenError,
+    #[display(fmt = "SpotifyExpiredTokenError")]
+    SpotifyExpiredTokenError,
+    #[display(fmt = "SpotifyNotPlayingError")]
+    SpotifyNotPlayingError,
     #[display(fmt = "GithubRequestError")]
     GithubRequestError,
 }

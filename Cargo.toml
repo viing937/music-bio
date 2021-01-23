@@ -9,7 +9,9 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 env_logger = "0.8"
+actix = "0.10"
 actix-web = { version = "3.3", features = ["openssl"] }
+actix-web-actors = "3.0"
 dotenv = "0.15"
 url = "2.2"
 openssl = "0.10"

@@ -3,16 +3,19 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-use actix_web::error::BlockingError;
-use actix_web::middleware::Logger;
-use actix_web::{http, web, App, Error, HttpResponse, HttpServer, Responder};
-use diesel::r2d2::{self, ConnectionManager};
-use diesel::SqliteConnection;
+use actix::prelude::*;
+use actix_web::{
+    error::BlockingError, http, middleware::Logger, web, App, Error, HttpResponse, HttpServer,
+    Responder,
+};
+use diesel::{
+    r2d2::{self, ConnectionManager},
+    SqliteConnection,
+};
 use dotenv::dotenv;
 use log::{debug, info};
 use serde::Deserialize;
 use std::env;
-
 mod spotify;
 use spotify::SpotifyToken;
 mod github;
@@ -20,6 +23,8 @@ use github::GithubAccessToken;
 mod cipher;
 mod error;
 use error::MyError;
+mod actor;
+use actor::Scheduler;
 mod model;
 mod schema;
 
@@ -66,8 +71,6 @@ async fn auth_callback(
     debug!("{:?}", info);
     let token_info = SpotifyToken::new(spotify::GrantType::AuthorizationCode, &info.code).await?;
     debug!("{:?}", token_info);
-    let current_playing_item = token_info.get_current_playing_item().await?;
-    debug!("{:?}", current_playing_item);
 
     let state = cipher::decrypt(&info.state).await?;
     let github_access_token: GithubAccessToken = serde_json::from_str(&state)?;
@@ -78,7 +81,7 @@ async fn auth_callback(
         github_username: github_access_token.username.clone(),
         github_access_token: github_access_token.access_token.clone(),
         spotify_access_token: token_info.access_token.clone(),
-        spotify_refresh_token: token_info.refresh_token.clone(),
+        spotify_refresh_token: token_info.refresh_token.unwrap(),
     };
     let spotify_github = match web::block(move || spotify_github.save(&conn)).await {
         Ok(v) => Ok(v),
@@ -87,9 +90,6 @@ async fn auth_callback(
     }?;
     debug!("{:?}", spotify_github);
 
-    github_access_token
-        .update_user_bio(&format!("🎵 {}", current_playing_item.name))
-        .await?;
     Ok(HttpResponse::Ok().body("ok."))
 }
 
@@ -108,6 +108,9 @@ async fn main() -> std::io::Result<()> {
     info!("Auto migrating database...");
     embedded_migrations::run(&pool.get().expect("Failed to get db connection."))
         .expect("Failed to auto migrate database.");
+
+    info!("Starting scheduler...");
+    Scheduler.start();
 
     info!("Starting web server...");
     HttpServer::new(move || {
