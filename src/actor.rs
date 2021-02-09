@@ -112,7 +112,13 @@ impl Handler<SpotifyGithub> for SpotifyGithubWorker {
                 username: msg.github_username,
                 access_token: msg.github_access_token,
             };
-            match github_token.update_user_bio(&format!("🎵 {}", name)).await {
+            let bio;
+            if name.is_empty() {
+                bio = "".to_string();
+            } else {
+                bio = format!("🎵 {}", name);
+            }
+            match github_token.update_user_bio(&bio).await {
                 Err(MyError::GithubRequestError) => {}
                 _ => return,
             }
