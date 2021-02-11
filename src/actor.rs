@@ -1,4 +1,4 @@
-use crate::{error::MyError, spotify};
+use crate::{error::CustomError, spotify};
 use actix::prelude::*;
 use diesel::prelude::*;
 use github::GithubAccessToken;
@@ -85,7 +85,8 @@ impl Handler<SpotifyGithub> for SpotifyGithubWorker {
             info!("Refreshing spotify token...");
             let spotify_token = match spotify_token.refresh_token().await {
                 Ok(k) => k,
-                Err(MyError::SpotifyExpiredTokenError) | Err(MyError::SpotifyTokenError) => {
+                Err(CustomError::SpotifyExpiredTokenError)
+                | Err(CustomError::SpotifyTokenError) => {
                     info!("Deleting bad spotify token...");
                     let conn = get_db_connection();
                     msg.delete(&conn).unwrap();
@@ -119,7 +120,7 @@ impl Handler<SpotifyGithub> for SpotifyGithubWorker {
                 bio = format!("🎵 {}", name);
             }
             match github_token.update_user_bio(&bio).await {
-                Err(MyError::GithubRequestError) => {}
+                Err(CustomError::GithubRequestError) => {}
                 _ => return,
             }
         };

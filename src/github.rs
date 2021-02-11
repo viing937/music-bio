@@ -3,7 +3,7 @@ use actix_web::http;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
-use crate::error::MyError;
+use crate::error::CustomError;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GithubAccessToken {
@@ -16,7 +16,7 @@ impl GithubAccessToken {
     const HEADER_ACCEPT: &'static str = "application/vnd.github.v3+json";
     const API_URL_PREFIX: &'static str = "https://api.github.com";
 
-    pub async fn update_user_bio(&self, bio: &str) -> Result<(), MyError> {
+    pub async fn update_user_bio(&self, bio: &str) -> Result<(), CustomError> {
         info!("Update github bio...");
         let client = Client::default();
         let resp = client
@@ -27,11 +27,10 @@ impl GithubAccessToken {
             .send_json(&UserInfo {
                 bio: bio.to_string(),
             })
-            .await
-            .map_err(|e| MyError::SendRequestError(e))?;
+            .await?;
         debug!("{:?}", resp);
         if !resp.status().is_success() {
-            return Err(MyError::GithubRequestError);
+            return Err(CustomError::GithubRequestError);
         }
         Ok(())
     }

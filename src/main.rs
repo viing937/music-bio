@@ -3,30 +3,31 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
+mod actor;
+mod cipher;
+mod error;
+mod github;
+mod model;
+mod schema;
+mod spotify;
+
 use actix::prelude::*;
 use actix_web::{
     error::BlockingError, http, middleware::Logger, web, App, Error, HttpResponse, HttpServer,
     Responder,
 };
+use actor::Scheduler;
 use diesel::{
     r2d2::{self, ConnectionManager},
     SqliteConnection,
 };
 use dotenv::dotenv;
+use error::CustomError;
+use github::GithubAccessToken;
 use log::{debug, info};
 use serde::Deserialize;
-use std::env;
-mod spotify;
 use spotify::SpotifyToken;
-mod github;
-use github::GithubAccessToken;
-mod cipher;
-mod error;
-use error::MyError;
-mod actor;
-use actor::Scheduler;
-mod model;
-mod schema;
+use std::env;
 
 embed_migrations!("./migrations");
 type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
@@ -48,8 +49,7 @@ async fn auth(info: web::Query<AuthInfo>) -> Result<HttpResponse, Error> {
     let state = serde_json::to_string(&GithubAccessToken {
         username: info.github_username.clone(),
         access_token: info.github_access_token.clone(),
-    })
-    .map_err(|e| MyError::SerdeJsonError(e))?;
+    })?;
     let state = cipher::encrypt(&state).await?;
     let url = SpotifyToken::get_auth_uri(&state)?;
     Ok(HttpResponse::Found()
@@ -75,7 +75,7 @@ async fn auth_callback(
     let state = cipher::decrypt(&info.state).await?;
     let github_access_token: GithubAccessToken = serde_json::from_str(&state)?;
 
-    let conn = pool.get().map_err(|e| MyError::DbPoolError(e))?;
+    let conn = pool.get().map_err(|e| CustomError::from(e))?;
     let spotify_github = model::SpotifyGithub {
         id: None,
         github_username: github_access_token.username.clone(),
@@ -85,8 +85,8 @@ async fn auth_callback(
     };
     let spotify_github = match web::block(move || spotify_github.save(&conn)).await {
         Ok(v) => Ok(v),
-        Err(BlockingError::Canceled) => Err(MyError::BlockingCancledError),
-        Err(BlockingError::Error(e)) => Err(MyError::DbResultError(e)),
+        Err(BlockingError::Canceled) => Err(CustomError::BlockingCancledError),
+        Err(BlockingError::Error(e)) => Err(CustomError::DbResultError(e)),
     }?;
     debug!("{:?}", spotify_github);
 

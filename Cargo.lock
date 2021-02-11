@@ -1172,7 +1172,6 @@ dependencies = [
  "actix",
  "actix-web",
  "actix-web-actors",
- "derive_more",
  "diesel",
  "diesel_migrations",
  "dotenv",
@@ -1183,6 +1182,7 @@ dependencies = [
  "r2d2",
  "serde",
  "serde_json",
+ "thiserror",
  "url",
 ]
 

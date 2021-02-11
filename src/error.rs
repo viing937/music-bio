@@ -1,53 +1,53 @@
-use std::string::FromUtf8Error;
+use std::{str::Utf8Error, string::FromUtf8Error};
 
 use actix_web::{
     client::SendRequestError, dev::HttpResponseBuilder, error::PayloadError, http::StatusCode,
     HttpResponse, ResponseError,
 };
-use derive_more::Display;
+use thiserror::Error;
 
-#[derive(Debug, Display)]
-pub enum MyError {
-    #[display(fmt = "UnknownError")]
-    UnknownError,
-    #[display(fmt = "UriParseError: {}", _0)]
-    UriParseError(url::ParseError),
-    #[display(fmt = "DbPoolError: {}", _0)]
-    DbPoolError(r2d2::Error),
-    #[display(fmt = "DbResultError: {}", _0)]
-    DbResultError(diesel::result::Error),
-    #[display(fmt = "SerdeJsonError: {}", _0)]
-    SerdeJsonError(serde_json::Error),
-    #[display(fmt = "BlockCancledError")]
+#[derive(Error, Debug)]
+pub enum CustomError {
+    #[error("Utf8Error: {0}")]
+    Utf8Error(#[from] Utf8Error),
+    #[error("UriParseError: {0}")]
+    UriParseError(#[from] url::ParseError),
+    #[error("DbPoolError: {0}")]
+    DbPoolError(#[from] r2d2::Error),
+    #[error("DbResultError: {0}")]
+    DbResultError(#[from] diesel::result::Error),
+    #[error("SerdeJsonError: {0}")]
+    SerdeJsonError(#[from] serde_json::Error),
+    #[error("BlockCancledError")]
     BlockingCancledError,
-    #[display(fmt = "OpensslError: {}", _0)]
-    OpensslError(openssl::error::ErrorStack),
-    #[display(fmt = "FromUtf8Error: {}", _0)]
-    FromUtf8Error(FromUtf8Error),
-    #[display(fmt = "PayloadError: {}", _0)]
-    PayloadError(PayloadError),
-    #[display(fmt = "SendRequestError: {}", _0)]
-    SendRequestError(SendRequestError),
-    #[display(fmt = "SpotifyRequestError")]
+    #[error("OpensslError: {0}")]
+    OpensslError(#[from] openssl::error::ErrorStack),
+    #[error("FromUtf8Error: {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+    #[error("PayloadError: {0}")]
+    PayloadError(#[from] PayloadError),
+    #[error("SendRequestError: {0}")]
+    SendRequestError(#[from] SendRequestError),
+    #[error("SpotifyRequestError")]
     SpotifyRequestError,
-    #[display(fmt = "SpotifyTokenError")]
+    #[error("SpotifyTokenError")]
     SpotifyTokenError,
-    #[display(fmt = "SpotifyExpiredTokenError")]
+    #[error("SpotifyExpiredTokenError")]
     SpotifyExpiredTokenError,
-    #[display(fmt = "SpotifyNotPlayingError")]
+    #[error("SpotifyNotPlayingError")]
     SpotifyNotPlayingError,
-    #[display(fmt = "GithubRequestError")]
+    #[error("GithubRequestError")]
     GithubRequestError,
 }
 
-impl ResponseError for MyError {
+impl ResponseError for CustomError {
     fn error_response(&self) -> HttpResponse {
         HttpResponseBuilder::new(self.status_code()).body(self.to_string())
     }
     fn status_code(&self) -> StatusCode {
         match *self {
-            MyError::SpotifyRequestError => StatusCode::BAD_REQUEST,
-            MyError::GithubRequestError => StatusCode::BAD_REQUEST,
+            CustomError::SpotifyRequestError => StatusCode::BAD_REQUEST,
+            CustomError::GithubRequestError => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

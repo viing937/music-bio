@@ -1,4 +1,4 @@
-use crate::error::MyError;
+use crate::error::CustomError;
 use actix_web::{client::Client, http::StatusCode};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ impl SpotifyToken {
         env::var("CALLBACK_URI").expect("CALLBACK_URI")
     }
 
-    pub fn get_auth_uri(state: &str) -> Result<Url, MyError> {
+    pub fn get_auth_uri(state: &str) -> Result<Url, CustomError> {
         Url::parse_with_params(
             &format!("{}/en/authorize", SpotifyToken::AUTH_URL_PREFIX),
             &[
@@ -43,10 +43,10 @@ impl SpotifyToken {
                 ("state", state.to_string()),
             ],
         )
-        .map_err(|e| MyError::UriParseError(e))
+        .map_err(|e| CustomError::from(e))
     }
 
-    pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, MyError> {
+    pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, CustomError> {
         info!("Request access token using code {:?}...", code);
         let client = Client::default();
         let request_body = match grant_type {
@@ -70,25 +70,23 @@ impl SpotifyToken {
                 Some(&SpotifyToken::get_client_secret()),
             )
             .send_form(&request_body)
-            .await
-            .map_err(|e| MyError::SendRequestError(e))?;
+            .await?;
         debug!("{:?}", resp);
         match resp.status() {
-            StatusCode::BAD_REQUEST => return Err(MyError::SpotifyTokenError),
-            StatusCode::UNAUTHORIZED => return Err(MyError::SpotifyExpiredTokenError),
+            StatusCode::BAD_REQUEST => return Err(CustomError::SpotifyTokenError),
+            StatusCode::UNAUTHORIZED => return Err(CustomError::SpotifyExpiredTokenError),
             _ => (),
         };
         if !resp.status().is_success() {
-            return Err(MyError::SpotifyRequestError);
+            return Err(CustomError::SpotifyRequestError);
         }
-        let body = resp.body().await.map_err(|e| MyError::PayloadError(e))?;
-        let body = std::str::from_utf8(&body).map_err(|_e| MyError::UnknownError)?;
-        let token_info: SpotifyToken =
-            serde_json::from_str(body).map_err(|e| MyError::SerdeJsonError(e))?;
+        let body = resp.body().await?;
+        let body = std::str::from_utf8(&body)?;
+        let token_info: SpotifyToken = serde_json::from_str(body)?;
         Ok(token_info)
     }
 
-    pub async fn refresh_token(mut self) -> Result<SpotifyToken, MyError> {
+    pub async fn refresh_token(mut self) -> Result<SpotifyToken, CustomError> {
         info!("Refresh spotify token...");
         let token =
             SpotifyToken::new(GrantType::RefreshToken, &self.refresh_token.unwrap()).await?;
@@ -97,7 +95,7 @@ impl SpotifyToken {
         Ok(self)
     }
 
-    pub async fn get_current_playing_item(&self) -> Result<CurrentPlayingItem, MyError> {
+    pub async fn get_current_playing_item(&self) -> Result<CurrentPlayingItem, CustomError> {
         info!("Request current playing item...");
         let client = Client::default();
         let mut resp = client
@@ -107,21 +105,19 @@ impl SpotifyToken {
             ))
             .bearer_auth(&self.access_token)
             .send()
-            .await
-            .map_err(|e| MyError::SendRequestError(e))?;
+            .await?;
         debug!("{:?}", resp);
         match resp.status() {
-            StatusCode::BAD_REQUEST => return Err(MyError::SpotifyTokenError),
-            StatusCode::NO_CONTENT => return Err(MyError::SpotifyNotPlayingError),
+            StatusCode::BAD_REQUEST => return Err(CustomError::SpotifyTokenError),
+            StatusCode::NO_CONTENT => return Err(CustomError::SpotifyNotPlayingError),
             _ => (),
         };
         if !resp.status().is_success() {
-            return Err(MyError::SpotifyRequestError);
+            return Err(CustomError::SpotifyRequestError);
         }
-        let body = resp.body().await.map_err(|e| MyError::PayloadError(e))?;
-        let body = std::str::from_utf8(&body).map_err(|_e| MyError::UnknownError)?;
-        let current_playing_info: CurrentPlayingInfo =
-            serde_json::from_str(body).map_err(|e| MyError::SerdeJsonError(e))?;
+        let body = resp.body().await?;
+        let body = std::str::from_utf8(&body)?;
+        let current_playing_info: CurrentPlayingInfo = serde_json::from_str(body)?;
         Ok(current_playing_info.item)
     }
 }
