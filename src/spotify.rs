@@ -33,7 +33,7 @@ impl SpotifyToken {
     }
 
     pub fn get_auth_uri(state: &str) -> Result<Url, CustomError> {
-        Url::parse_with_params(
+        let auth_url = Url::parse_with_params(
             &format!("{}/en/authorize", SpotifyToken::AUTH_URL_PREFIX),
             &[
                 ("client_id", SpotifyToken::get_client_id()),
@@ -42,8 +42,8 @@ impl SpotifyToken {
                 ("scope", "user-read-playback-state".to_string()),
                 ("state", state.to_string()),
             ],
-        )
-        .map_err(|e| CustomError::from(e))
+        )?;
+        Ok(auth_url)
     }
 
     pub async fn new(grant_type: GrantType, code: &str) -> Result<SpotifyToken, CustomError> {

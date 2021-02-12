@@ -20,8 +20,8 @@ pub enum CustomError {
     SerdeJsonError(#[from] serde_json::Error),
     #[error("BlockCancledError")]
     BlockingCancledError,
-    #[error("OpensslError: {0}")]
-    OpensslError(#[from] openssl::error::ErrorStack),
+    #[error("OpensslStackError: {0}")]
+    OpensslStackError(#[from] openssl::error::ErrorStack),
     #[error("FromUtf8Error: {0}")]
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("PayloadError: {0}")]
