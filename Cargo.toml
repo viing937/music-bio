@@ -9,7 +9,6 @@ log = "0.4.14"
 env_logger = "0.8.2"
 actix = "0.10.0"
 actix-web = { version = "3.3.2", features = ["openssl"] }
-actix-web-actors = "3.0.0"
 dotenv = "0.15.0"
 url = "2.2.0"
 openssl = "0.10.32"
