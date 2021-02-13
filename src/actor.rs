@@ -121,9 +121,10 @@ impl Handler<SpotifyGithub> for SpotifyGithubWorker {
             }
             match github_token.update_user_bio(&bio).await {
                 Err(CustomError::GithubRequestError) => {}
-                _ => return,
+                _ => (),
             }
         };
-        Ok(Arbiter::spawn(execution))
+        Arbiter::spawn(execution);
+        Ok(())
     }
 }

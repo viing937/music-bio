@@ -75,7 +75,7 @@ async fn auth_callback(
     let state = cipher::decrypt(&info.state).await?;
     let github_access_token: GithubAccessToken = serde_json::from_str(&state)?;
 
-    let conn = pool.get().map_err(|e| CustomError::from(e))?;
+    let conn = pool.get().map_err(CustomError::from)?;
     let spotify_github = model::SpotifyGithub {
         id: None,
         github_username: github_access_token.username.clone(),

@@ -59,7 +59,7 @@ impl SpotifyToken {
             GrantType::AuthorizationCode => RequestTokenInfo {
                 grant_type: "authorization_code".to_string(),
                 code: Some(code.to_string()),
-                redirect_uri: Some(SpotifyToken::get_callback_url().to_string()),
+                redirect_uri: Some(SpotifyToken::get_callback_url()),
                 refresh_token: None,
             },
         };
