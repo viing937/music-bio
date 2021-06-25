@@ -1,11 +1,17 @@
 FROM rust:latest as builder
 
+RUN cargo new --bin /opt/app
 WORKDIR /opt/app
-COPY . .
 
+COPY Cargo.lock Cargo.lock
+COPY Cargo.toml Cargo.toml
+RUN cargo build --release
+RUN rm src/*.rs
+
+COPY . .
 RUN cargo build --release
 
-FROM rust:slim
+FROM rust:latest
 
 RUN apt-get update && apt-get install -y \
     sqlite3 \
